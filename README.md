@@ -25,3 +25,11 @@ ssh root@localhost
 pkgin update
 pkgin_sets
 ```
+
+git pull code
+
+```shell
+git config --global http.sslVerify false
+git clone https://github.com/crypto-lee/minixCryptoFile.git
+git pull
+```
