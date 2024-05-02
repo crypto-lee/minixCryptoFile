@@ -329,7 +329,7 @@ int my_history(void)
 
 int my_builtinCmd(void)
 {
-    if (strcmp("cd", cmd_var->cmd[0].cmd[0]))
+    if (strcmp("cd", cmd_var->cmd_all[0].cmd[0]))
     {
         my_cd();
         return 0;
