@@ -71,7 +71,7 @@ int main(int argc, char **argv)
     strcpy(user_key, argv[4]);
     AES_set_encrypt_key(user_key, 128, &key);
 
-    pthread_t threads[NUM_THREADS];
+    mthread_thread_t threads[NUM_THREADS];
     struct ThreadData thread_data[NUM_THREADS];
 
     int i;
