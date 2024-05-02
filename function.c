@@ -2,90 +2,114 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <mthread.h>
 #include "/usr/include/openssl/aes.h"
+
+#define BLOCK_SIZE 16
+#define NUM_THREADS 4
+
+struct ThreadData
+{
+    FILE *input_file;
+    FILE *output_file;
+    AES_KEY *key;
+};
+
+void *encrypt_thread(void *arg)
+{
+    struct ThreadData *data = (struct ThreadData *)arg;
+    unsigned char plain_block[BLOCK_SIZE], encrypted_block[BLOCK_SIZE];
+
+    while (fread(plain_block, 1, BLOCK_SIZE, data->input_file) == BLOCK_SIZE)
+    {
+        AES_encrypt(plain_block, encrypted_block, data->key);
+        fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_file);
+    }
+
+    return NULL;
+}
+
+void *decrypt_thread(void *arg)
+{
+    struct ThreadData *data = (struct ThreadData *)arg;
+    unsigned char encrypted_block[BLOCK_SIZE], decrypted_block[BLOCK_SIZE];
+
+    while (fread(encrypted_block, 1, BLOCK_SIZE, data->input_file) == BLOCK_SIZE)
+    {
+        AES_decrypt(encrypted_block, decrypted_block, data->key);
+        fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_file);
+    }
+
+    return NULL;
+}
 
 int main(int argc, char **argv)
 {
-    if (5 != argc)
+    if (argc != 6)
     {
         fprintf(stderr, "参数输入错误\n");
         exit(1);
     }
 
-    FILE *fp_plain = NULL;
-    FILE *fp_encrypted = NULL;
+    FILE *fp_input = fopen(argv[2], "rb");
+    if (NULL == fp_input)
+    {
+        fprintf(stderr, "open %s fail: %s\n", argv[2], strerror(errno));
+        exit(1);
+    }
+
+    FILE *fp_output = fopen(argv[3], "wb");
+    if (NULL == fp_output)
+    {
+        fprintf(stderr, "open %s fail: %s\n", argv[3], strerror(errno));
+        fclose(fp_input);
+        exit(1);
+    }
+
     AES_KEY key;
-    unsigned char p[16], e[16];
     char user_key[17];
-    int res = 0;
+    strcpy(user_key, argv[4]);
+    AES_set_encrypt_key(user_key, 128, &key);
 
-    if (!strcmp(argv[4], "-e"))
+    pthread_t threads[NUM_THREADS];
+    struct ThreadData thread_data[NUM_THREADS];
+
+    int i;
+    if (!strcmp(argv[1], "-e"))
     {
-        fp_plain = fopen(argv[1], "rb");
-        if (NULL == fp_plain)
+        for (i = 0; i < NUM_THREADS; ++i)
         {
-            fprintf(stderr, "open %s fail: %s\n", argv[1], strerror(errno));
-            exit(1);
+            thread_data[i].input_file = fp_input;
+            thread_data[i].output_file = fp_output;
+            thread_data[i].key = &key;
+            pthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
         }
-        fp_encrypted = fopen(argv[2], "wb");
-
-        strcpy(user_key, argv[3]);
-        AES_set_encrypt_key(user_key, 128, &key);
-
-        // Get the size of the plaintext file
-        fseek(fp_plain, 0, SEEK_END);
-        long plaintext_size = ftell(fp_plain);
-        fseek(fp_plain, 0, SEEK_SET);
-
-        // Write the plaintext size to the encrypted file
-        fwrite(&plaintext_size, sizeof(plaintext_size), 1, fp_encrypted);
-
-        while (res = fread(p, 1, 16, fp_plain))
-        {
-            AES_encrypt(p, e, &key);
-            fwrite(e, 1, 16, fp_encrypted);
-            if (res < 16)
-                break;
-        }
-
-        fclose(fp_plain);
-        fclose(fp_encrypted);
     }
-    else if (!strcmp(argv[4], "-d"))
+    else if (!strcmp(argv[1], "-d"))
     {
-        long plaintext_size = 0;
-
-        fp_encrypted = fopen(argv[1], "rb");
-        if (NULL == fp_encrypted)
+        for (i = 0; i < NUM_THREADS; ++i)
         {
-            fprintf(stderr, "open %s fail: %s\n", argv[1], strerror(errno));
-            exit(1);
+            thread_data[i].input_file = fp_input;
+            thread_data[i].output_file = fp_output;
+            thread_data[i].key = &key;
+            pthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
         }
-        fp_plain = fopen(argv[2], "wb");
-
-        strcpy(user_key, argv[3]);
-        AES_set_decrypt_key(user_key, 128, &key);
-
-        // Read the plaintext size from the encrypted file
-        fread(&plaintext_size, sizeof(plaintext_size), 1, fp_encrypted);
-
-        while (1)
-        {
-            fread(e, 1, 16, fp_encrypted);
-            AES_decrypt(e, p, &key);
-
-            // Adjust the number of bytes to write based on remaining bytes
-            int bytes_to_write = (plaintext_size >= 16) ? 16 : plaintext_size;
-            fwrite(p, 1, bytes_to_write, fp_plain);
-
-            plaintext_size -= 16;
-            if (plaintext_size <= 0)
-                break;
-        }
-
-        fclose(fp_plain);
-        fclose(fp_encrypted);
     }
+    else
+    {
+        fprintf(stderr, "Invalid option\n");
+        fclose(fp_input);
+        fclose(fp_output);
+        exit(1);
+    }
+
+    for (i = 0; i < NUM_THREADS; ++i)
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    fclose(fp_input);
+    fclose(fp_output);
 
     return 0;
 }
