@@ -63,8 +63,7 @@ void *decrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
-        data->input_buffer->size = bytes_read;
+        size_t bytes_read = data->input_buffer->size; // Read the actual size of data from the input buffer
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
@@ -80,7 +79,7 @@ void *decrypt_thread(void *arg)
             AES_decrypt(encrypted_block, decrypted_block, data->key);
 
             mthread_mutex_lock(&data->output_buffer->mutex);
-            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file); // Write decrypted data to the output buffer
             mthread_mutex_unlock(&data->output_buffer->mutex);
         }
     }
@@ -95,15 +94,19 @@ int main(int argc, char **argv)
         fprintf(stderr, "参数输入错误\n");
         exit(1);
     }
-
-    FILE *fp_input = fopen(argv[3], "rb");
+    // 遍历并打印每个命令行参数
+    for (int i = 0; i < argc; ++i)
+    {
+        printf("Argument %d: %s\n", i, argv[i]);
+    }
+    FILE *fp_input = fopen(argv[2], "rb");
     if (NULL == fp_input)
     {
         fprintf(stderr, "open %s fail: %s\n", argv[3], strerror(errno));
         exit(1);
     }
 
-    FILE *fp_output = fopen(argv[4], "wb");
+    FILE *fp_output = fopen(argv[3], "wb");
     if (NULL == fp_output)
     {
         fprintf(stderr, "open %s fail: %s\n", argv[4], strerror(errno));
@@ -123,17 +126,18 @@ int main(int argc, char **argv)
 
     AES_KEY key;
     unsigned char user_key[17];
-    strcpy((char *)user_key, argv[5]);
+    strcpy((char *)user_key, argv[4]);
 
     AES_set_encrypt_key(user_key, 128, &key);
 
-    mthread_thread_t threads[NUM_THREADS];
-    struct ThreadData thread_data[NUM_THREADS];
+    mthread_thread_t threads[NUM_THREADS * 2];
+    struct ThreadData thread_data[NUM_THREADS * 2];
 
     int num_threads = 0;
     if (strcmp(argv[1], "-e") == 0)
     {
         // Create encryption threads
+        printf("encrypt!!");
         for (int i = 0; i < NUM_THREADS; ++i)
         {
             thread_data[i].input_buffer = &input_buffer;
@@ -142,18 +146,36 @@ int main(int argc, char **argv)
             mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
         }
         num_threads = NUM_THREADS;
+
+        // Wait for all encryption threads to finish
+        for (int i = 0; i < NUM_THREADS; ++i)
+        {
+            mthread_join(threads[i], NULL);
+        }
+
+        // Reset input_buffer size to 0 for decryption
+        input_buffer.size = 0;
     }
     else if (strcmp(argv[1], "-d") == 0)
     {
         // Create decryption threads
+        printf("decrypt!!");
         for (int i = 0; i < NUM_THREADS; ++i)
         {
-            thread_data[i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
-            thread_data[i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
-            thread_data[i].key = &key;
-            mthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
+            thread_data[NUM_THREADS + i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
+            thread_data[NUM_THREADS + i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
+            thread_data[NUM_THREADS + i].key = &key;
+            mthread_create(&threads[NUM_THREADS + i], NULL, decrypt_thread, &thread_data[NUM_THREADS + i]);
         }
         num_threads = NUM_THREADS;
+
+        // Wait for all decryption threads to finish
+        for (int i = 0; i < NUM_THREADS; ++i)
+        {
+            mthread_join(threads
+                             [i],
+                         NULL);
+        }
     }
     else
     {
@@ -162,9 +184,8 @@ int main(int argc, char **argv)
         fclose(fp_output);
         exit(1);
     }
-
     // Wait for all threads to finish
-    for (int i = 0; i < num_threads; ++i)
+    for (int i = 0; i < num_threads * 2; ++i)
     {
         mthread_join(threads[i], NULL);
     }
