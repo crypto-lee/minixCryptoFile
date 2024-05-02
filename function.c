@@ -96,17 +96,17 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    FILE *fp_input = fopen(argv[2], "rb");
+    FILE *fp_input = fopen(argv[3], "rb");
     if (NULL == fp_input)
     {
-        fprintf(stderr, "open %s fail: %s\n", argv[2], strerror(errno));
+        fprintf(stderr, "open %s fail: %s\n", argv[3], strerror(errno));
         exit(1);
     }
 
-    FILE *fp_output = fopen(argv[3], "wb");
+    FILE *fp_output = fopen(argv[4], "wb");
     if (NULL == fp_output)
     {
-        fprintf(stderr, "open %s fail: %s\n", argv[3], strerror(errno));
+        fprintf(stderr, "open %s fail: %s\n", argv[4], strerror(errno));
         fclose(fp_input);
         exit(1);
     }
@@ -123,33 +123,48 @@ int main(int argc, char **argv)
 
     AES_KEY key;
     unsigned char user_key[17];
-    strcpy((char *)user_key, argv[4]);
+    strcpy((char *)user_key, argv[5]);
 
     AES_set_encrypt_key(user_key, 128, &key);
 
-    mthread_thread_t threads[NUM_THREADS * 2];
-    struct ThreadData thread_data[NUM_THREADS * 2];
+    mthread_thread_t threads[NUM_THREADS];
+    struct ThreadData thread_data[NUM_THREADS];
 
-    // Create encryption threads
-    for (int i = 0; i < NUM_THREADS; ++i)
+    int num_threads = 0;
+    if (strcmp(argv[1], "-e") == 0)
     {
-        thread_data[i].input_buffer = &input_buffer;
-        thread_data[i].output_buffer = &output_buffer;
-        thread_data[i].key = &key;
-        mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
+        // Create encryption threads
+        for (int i = 0; i < NUM_THREADS; ++i)
+        {
+            thread_data[i].input_buffer = &input_buffer;
+            thread_data[i].output_buffer = &output_buffer;
+            thread_data[i].key = &key;
+            mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
+        }
+        num_threads = NUM_THREADS;
     }
-
-    // Create decryption threads
-    for (int i = 0; i < NUM_THREADS; ++i)
+    else if (strcmp(argv[1], "-d") == 0)
     {
-        thread_data[NUM_THREADS + i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
-        thread_data[NUM_THREADS + i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
-        thread_data[NUM_THREADS + i].key = &key;
-        mthread_create(&threads[NUM_THREADS + i], NULL, decrypt_thread, &thread_data[NUM_THREADS + i]);
+        // Create decryption threads
+        for (int i = 0; i < NUM_THREADS; ++i)
+        {
+            thread_data[i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
+            thread_data[i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
+            thread_data[i].key = &key;
+            mthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
+        }
+        num_threads = NUM_THREADS;
+    }
+    else
+    {
+        fprintf(stderr, "无效的参数\n");
+        fclose(fp_input);
+        fclose(fp_output);
+        exit(1);
     }
 
     // Wait for all threads to finish
-    for (int i = 0; i < NUM_THREADS * 2; ++i)
+    for (int i = 0; i < num_threads; ++i)
     {
         mthread_join(threads[i], NULL);
     }
