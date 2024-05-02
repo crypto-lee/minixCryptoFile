@@ -115,8 +115,9 @@ int main(int argc, char **argv)
     struct Buffer output_buffer = {fp_output, {0}, 0, MTHREAD_MUTEX_INITIALIZER};
 
     AES_KEY key;
-    char user_key[17];
-    strcpy(user_key, argv[4]);
+    unsigned char user_key[17];        // Changed to unsigned char
+    strcpy((char *)user_key, argv[4]); // Cast to char *
+
     AES_set_encrypt_key(user_key, 128, &key);
 
     mthread_thread_t threads[NUM_THREADS];
