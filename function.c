@@ -23,6 +23,7 @@ struct Buffer
     size_t size;
     mthread_mutex_t mutex;
 };
+
 // 将密钥调整为 16 字节，不足部分用 0 补齐，超出部分截断
 void adjust_key(unsigned char *user_key, unsigned char *adjusted_key)
 {
@@ -45,13 +46,13 @@ void *encrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
-        data->input_buffer->size = bytes_read;
+        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
 
+        mthread_mutex_lock(&data->output_buffer->mutex);
         size_t num_blocks = bytes_read / BLOCK_SIZE;
         for (size_t i = 0; i < num_blocks; ++i)
         {
@@ -61,10 +62,9 @@ void *encrypt_thread(void *arg)
             unsigned char encrypted_block[BLOCK_SIZE];
             AES_encrypt(plain_block, encrypted_block, data->key);
 
-            mthread_mutex_lock(&data->output_buffer->mutex);
             fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
-            mthread_mutex_unlock(&data->output_buffer->mutex);
         }
+        mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
     return NULL;
@@ -77,13 +77,13 @@ void *decrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
-        data->input_buffer->size = bytes_read;
+        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
 
+        mthread_mutex_lock(&data->output_buffer->mutex);
         size_t num_blocks = bytes_read / BLOCK_SIZE;
         for (size_t i = 0; i < num_blocks; ++i)
         {
@@ -93,10 +93,9 @@ void *decrypt_thread(void *arg)
             unsigned char decrypted_block[BLOCK_SIZE];
             AES_decrypt(plain_block, decrypted_block, data->key);
 
-            mthread_mutex_lock(&data->output_buffer->mutex);
-            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file); // Write decrypted data to the output buffer
-            mthread_mutex_unlock(&data->output_buffer->mutex);
+            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
         }
+        mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
     return NULL;
@@ -131,11 +130,13 @@ int main(int argc, char **argv)
         fprintf(stderr, "参数输入错误\n");
         exit(1);
     }
-    // 遍历并打印每个命令行参数
+
+    // 打印每个命令行参数
     for (int i = 0; i < argc; ++i)
     {
         printf("Argument %d: %s\n", i, argv[i]);
     }
+
     FILE *fp_input = fopen(argv[2], "rb");
     if (NULL == fp_input)
     {
@@ -170,8 +171,8 @@ int main(int argc, char **argv)
     adjust_key(user_key, adjusted_key);
     encrypt_decrypt_string(user_key);
 
-    AES_set_encrypt_key(user_key, 128, &key);
-    AES_set_decrypt_key(user_key, 128, &key);
+    AES_set_encrypt_key(adjusted_key, 128, &key);
+    AES_set_decrypt_key(adjusted_key, 128, &key);
 
     mthread_thread_t threads[NUM_THREADS * 2];
     struct ThreadData thread_data[NUM_THREADS * 2];
@@ -189,20 +190,11 @@ int main(int argc, char **argv)
             mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
         }
         num_threads = NUM_THREADS;
-
-        // Wait for all encryption threads to finish
-        for (int i = 0; i < NUM_THREADS; ++i)
-        {
-            mthread_join(threads[i], NULL);
-        }
-
-        // Reset input_buffer size to 0 for decryption
-        input_buffer.size = 0;
     }
     else if (strcmp(argv[1], "-d") == 0)
     {
-        // Create decryption threads
-        printf("\ndecrypt!!\n");
+        // 创建解密线程
+        printf("\nDecrypting...\n");
         for (int i = 0; i < NUM_THREADS; ++i)
         {
             thread_data[NUM_THREADS + i].input_buffer = &input_buffer;   // Input buffer is now the encrypted output
@@ -211,14 +203,6 @@ int main(int argc, char **argv)
             mthread_create(&threads[NUM_THREADS + i], NULL, decrypt_thread, &thread_data[NUM_THREADS + i]);
         }
         num_threads = NUM_THREADS;
-
-        // Wait for all decryption threads to finish
-        for (int i = 0; i < NUM_THREADS; ++i)
-        {
-            mthread_join(threads
-                             [i],
-                         NULL);
-        }
     }
     else
     {
@@ -227,8 +211,9 @@ int main(int argc, char **argv)
         fclose(fp_output);
         exit(1);
     }
-    // Wait for all threads to finish
-    for (int i = 0; i < num_threads * 2; ++i)
+
+    // 等待所有线程完成
+    for (int i = 0; i < num_threads; ++i)
     {
         mthread_join(threads[i], NULL);
     }
