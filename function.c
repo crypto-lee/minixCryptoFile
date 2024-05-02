@@ -46,15 +46,24 @@ void *encrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
 
         mthread_mutex_lock(&data->output_buffer->mutex);
-        AES_encrypt(data->input_buffer->data, data->output_buffer->data, data->key);
-        fwrite(data->output_buffer->data, 1, bytes_read, data->output_buffer->file);
+        size_t num_blocks = bytes_read / BLOCK_SIZE;
+        for (size_t i = 0; i < num_blocks; ++i)
+        {
+            unsigned char plain_block[BLOCK_SIZE];
+            memcpy(plain_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
+
+            unsigned char encrypted_block[BLOCK_SIZE];
+            AES_encrypt(plain_block, encrypted_block, data->key);
+
+            fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+        }
         mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
@@ -68,15 +77,24 @@ void *decrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
 
         mthread_mutex_lock(&data->output_buffer->mutex);
-        AES_decrypt(data->input_buffer->data, data->output_buffer->data, data->key);
-        fwrite(data->output_buffer->data, 1, bytes_read, data->output_buffer->file);
+        size_t num_blocks = bytes_read / BLOCK_SIZE;
+        for (size_t i = 0; i < num_blocks; ++i)
+        {
+            unsigned char plain_block[BLOCK_SIZE];
+            memcpy(plain_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
+
+            unsigned char decrypted_block[BLOCK_SIZE];
+            AES_decrypt(plain_block, decrypted_block, data->key);
+
+            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+        }
         mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
