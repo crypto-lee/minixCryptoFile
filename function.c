@@ -7,23 +7,21 @@
 
 #define BLOCK_SIZE 16
 #define BUFFER_SIZE 1024
-#define NUM_THREADS 4
+#define NUM_THREADS 1
 
 struct ThreadData
 {
     struct Buffer *input_buffer;
     struct Buffer *output_buffer;
     AES_KEY *key;
+    bool last_block = false;
 };
 
 struct Buffer
 {
-    FILE *file;
     unsigned char data[BUFFER_SIZE];
     size_t size;
-    mthread_mutex_t mutex;
 };
-
 // 将密钥调整为 16 字节，不足部分用 0 补齐，超出部分截断
 void adjust_key(unsigned char *user_key, unsigned char *adjusted_key)
 {
@@ -39,63 +37,95 @@ void adjust_key(unsigned char *user_key, unsigned char *adjusted_key)
     }
 }
 
-void *encrypt_thread(void *arg)
+void *encrypt_thread(struct ThreadData *data)
 {
-    struct ThreadData *data = (struct ThreadData *)arg;
-
+    unsigned char p[BLOCK_SIZE], e[BLOCK_SIZE];
+    size_t effset = 0; // 每次开始读或写的位置
+    size_t bytes_to_read = 0;
+    size_t size_copy = 0;
+    size_copy = data->input_buffer->size;
     while (1)
     {
-        mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
-        mthread_mutex_unlock(&data->input_buffer->mutex);
-
-        if (bytes_read == 0)
-            break;
-
-        mthread_mutex_lock(&data->output_buffer->mutex);
-        size_t num_blocks = bytes_read / BLOCK_SIZE;
-        for (size_t i = 0; i < num_blocks; ++i)
+        // Check if there is data available in input buffer
+        if (size_copy == 0)
         {
-            unsigned char plain_block[BLOCK_SIZE];
-            memcpy(plain_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
-
-            unsigned char encrypted_block[BLOCK_SIZE];
-            AES_encrypt(plain_block, encrypted_block, data->key);
-
-            fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+            // If no data available, exit thread
+            break;
         }
-        mthread_mutex_unlock(&data->output_buffer->mutex);
+        // Read data from input buffer
+        bytes_to_read = size_copy < 16 ? size_copy : 16;
+        memcpy(p, data->input_buffer->data + effset, bytes_to_read);
+        size_copy -= bytes_to_read;
+        effset += bytes_to_read;
+
+        // Encrypt data
+        AES_encrypt(p, e, data->key);
+
+        // Write encrypted data to output buffer
+        memcpy(data->output_buffer->data + size_copy, e, 16);
+    }
+
+    if (data->last_block)
+    {
+        // Encrypt remaining bytes count and append to output buffer
+        if (bytes_to_read == 0)
+        {
+            bytes_to_read = 16;
+        }
+        sprintf(p, "%d", bytes_to_read);
+        AES_encrypt(p, e, data->key);
+
+        // Write encrypted bytes count to output buffer
+        memcpy(data->output_buffer->data + size_copy, e, 16);
+        size_copy += 16;
     }
 
     return NULL;
 }
-
-void *decrypt_thread(void *arg)
+void *decrypt_thread(struct ThreadData *data)
 {
-    struct ThreadData *data = (struct ThreadData *)arg;
+    unsigned char p[BLOCK_SIZE], d[BLOCK_SIZE];
+    size_t effset = 0; // 每次开始读或写的位置
+    size_t bytes_to_read = 0;
+    size_t size_copy = 0;
+    size_copy = data->input_buffer->size;
+    int last_block_size;
+    if (data->last_block)
+    {
+        // Decrypt last block size
+        memcpy(p, data->input_buffer->data + size_copy - BLOCK_SIZE, BLOCK_SIZE);
+        AES_decrypt(p, d, data->key);
+        last_block_size = atoi(d);
+        size_copy -= BLOCK_SIZE;
+    }
 
     while (1)
     {
-        mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BLOCK_SIZE, data->input_buffer->file);
-        mthread_mutex_unlock(&data->input_buffer->mutex);
-
-        if (bytes_read == 0)
-            break;
-
-        mthread_mutex_lock(&data->output_buffer->mutex);
-        size_t num_blocks = bytes_read / BLOCK_SIZE;
-        for (size_t i = 0; i < num_blocks; ++i)
+        // Check if there is data available in input buffer
+        if (size_copy == 0)
         {
-            unsigned char plain_block[BLOCK_SIZE];
-            memcpy(plain_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
-
-            unsigned char decrypted_block[BLOCK_SIZE];
-            AES_decrypt(plain_block, decrypted_block, data->key);
-
-            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+            // If no data available, exit thread
+            break;
         }
-        mthread_mutex_unlock(&data->output_buffer->mutex);
+
+        // Read data from input buffer
+        bytes_to_read = BLOCK_SIZE;
+        effset = size_copy - bytes_to_read; // Update effset for decryption
+        memcpy(p, data->input_buffer->data + effset, bytes_to_read);
+        size_copy -= bytes_to_read;
+
+        // Decrypt data
+        AES_decrypt(p, d, data->key);
+        if (data->last_block && size_copy == 0)
+        {
+            bytes_to_read = last_block_size;
+        }
+        else
+        {
+            bytes_to_read = BLOCK_SIZE;
+        }
+        // Write decrypted data to output buffer
+        memcpy(data->output_buffer->data + effset, d, bytes_to_read);
     }
 
     return NULL;
@@ -148,19 +178,9 @@ int main(int argc, char **argv)
     if (NULL == fp_output)
     {
         fprintf(stderr, "open %s fail: %s\n", argv[4], strerror(errno));
-        fclose(fp_input);
+        fclose(fp_output);
         exit(1);
     }
-
-    struct Buffer input_buffer;
-    input_buffer.file = fp_input;
-    input_buffer.size = 0;
-    mthread_mutex_init(&input_buffer.mutex, NULL);
-
-    struct Buffer output_buffer;
-    output_buffer.file = fp_output;
-    output_buffer.size = 0;
-    mthread_mutex_init(&output_buffer.mutex, NULL);
 
     AES_KEY key;
     unsigned char user_key[17];
@@ -169,13 +189,13 @@ int main(int argc, char **argv)
 
     // 调整密钥长度为 16 字节
     adjust_key(user_key, adjusted_key);
-    encrypt_decrypt_string(user_key);
+    encrypt_decrypt_string(adjusted_key);
 
     AES_set_encrypt_key(adjusted_key, 128, &key);
     AES_set_decrypt_key(adjusted_key, 128, &key);
 
-    mthread_thread_t threads[NUM_THREADS * 2];
-    struct ThreadData thread_data[NUM_THREADS * 2];
+    mthread_thread_t threads[NUM_THREADS];
+    struct ThreadData thread_data[NUM_THREADS];
 
     int num_threads = 0;
     if (strcmp(argv[1], "-e") == 0)
