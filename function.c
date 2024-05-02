@@ -1,99 +1,110 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <minix/u64.h>
-#include <minix/callnr.h>
-#include <minix/com.h>
-#include <minix/vfsif.h>
-#include <minix/const.h>
-#include <minix/type.h>
-#include <minix/syslib.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <openssl/aes.h>
 
-#define BUFFER_SIZE 1024
-#define AES_KEY_SIZE 128
-
-// AES加密函数
-void encryptFile(const char *inputFile, const char *outputFile, const char *key)
+int main(int argc, char **argv)
 {
-    // 打开输入文件
-    int fd_in = open(inputFile, O_RDONLY);
-    if (fd_in < 0)
+    /*
+       char user_key[AES_BLOCK_SIZE] = "abc123";
+       AES_KEY key;
+
+       char p_msq[16] = "abcdefghijkl";
+       char e_msq[17];
+
+       AES_set_encrypt_key(user_key, AES_BLOCK_SIZE*8, &key);
+
+       AES_encrypt(p_msq, e_msq, &key);
+
+       printf("%s\n",e_msq);
+
+       char msg[16];
+
+       AES_set_decrypt_key(user_key, 128, &key);
+       AES_decrypt(e_msq, msg, &key);
+
+       printf("%s\n",msg);
+     */
+    if (5 != argc)
     {
-        perror("Failed to open input file");
-        return;
+        fprintf(stderr, "参数输入错误\n");
+        exit(1);
     }
 
-    // 创建输出文件
-    int fd_out = creat(outputFile, S_IRUSR | S_IWUSR);
-    if (fd_out < 0)
+    FILE *fp_plain = NULL;
+    FILE *fp_encrypted = NULL;
+    AES_KEY key;
+    unsigned char p[16], e[16];
+    char user_key[17];
+    int res = 0;
+
+    if (!strcmp(argv[4], "-e"))
     {
-        perror("Failed to create output file");
-        close(fd_in);
-        return;
-    }
+        fp_plain = fopen(argv[1], "rb");
+        if (NULL == fp_plain)
+        {
+            fprintf(stderr, "open %s fail: %s\n", argv[1], strerror(errno));
+            exit(1);
+        }
+        fp_encrypted = fopen(argv[2], "wb");
 
-    // 读取输入文件并加密
-    char buffer[BUFFER_SIZE];
-    ssize_t bytes_read;
-    while ((bytes_read = read(fd_in, buffer, BUFFER_SIZE)) > 0)
+        strcpy(user_key, argv[3]);
+        AES_set_encrypt_key(user_key, 128, &key);
+
+        while (res = fread(p, 1, 16, fp_plain))
+        {
+            AES_encrypt(p, e, &key);
+            fwrite(e, 1, 16, fp_encrypted);
+            if (res < 16)
+                break;
+        }
+        if (res == 0)
+            res = 16;
+        sprintf(p, "%d", res);
+        AES_encrypt(p, e, &key);
+        fwrite(e, 1, 16, fp_encrypted);
+
+        fclose(fp_plain);
+        fclose(fp_encrypted);
+    }
+    else if (!strcmp(argv[4], "-d"))
     {
-        // 在这里进行AES加密
-        // 这里只是一个示例，实际上需要调用适当的AES加密函数
-        // 使用提供的密钥对buffer进行加密
+        int len = 0;
+        long end = 0;
+        fp_encrypted = fopen(argv[1], "rb");
+        if (NULL == fp_encrypted)
+        {
+            fprintf(stderr, "open %s fail: %s\n", argv[1], strerror(errno));
+            exit(1);
+        }
+        fp_plain = fopen(argv[2], "wb");
 
-        // 将加密后的数据写入输出文件
-        write(fd_out, buffer, bytes_read);
+        strcpy(user_key, argv[3]);
+        AES_set_decrypt_key(user_key, 128, &key);
+
+        fseek(fp_encrypted, -16, SEEK_END);
+        end = ftell(fp_encrypted);
+        fread(e, 1, 16, fp_encrypted);
+        AES_decrypt(e, p, &key);
+        len = atoi(p);
+        rewind(fp_encrypted);
+
+        while (1)
+        {
+            fread(e, 1, 16, fp_encrypted);
+            AES_decrypt(e, p, &key);
+            if (end == ftell(fp_encrypted))
+            {
+                fwrite(p, 1, len, fp_plain);
+                break;
+            }
+            fwrite(p, 1, 16, fp_plain);
+        }
+
+        fclose(fp_plain);
+        fclose(fp_encrypted);
     }
-
-    // 关闭文件描述符
-    close(fd_in);
-    close(fd_out);
-
-    printf("File encrypted successfully.\n");
-}
-
-// 用户身份验证函数
-int authenticateUser(const char *username, const char *password)
-{
-    // 调用MINIX的身份验证API验证用户
-    // 这里只是一个示例，实际上需要调用MINIX提供的API
-    // 检查给定的用户名和密码是否匹配系统中的凭据
-    // 如果匹配返回1，否则返回0
-    return 1; // 假设验证总是成功
-}
-
-int main(int argc, char *argv[])
-{
-    if (argc != 4)
-    {
-        printf("Usage: %s <input_file> <output_file> <key>\n", argv[0]);
-        return 1;
-    }
-
-    char *inputFile = argv[1];
-    char *outputFile = argv[2];
-    char *key = argv[3];
-
-    // 用户身份验证
-    char username[64];
-    char password[64];
-    printf("Enter username: ");
-    scanf("%s", username);
-    printf("Enter password: ");
-    scanf("%s", password);
-
-    if (!authenticateUser(username, password))
-    {
-        printf("Authentication failed. Exiting...\n");
-        return 1;
-    }
-
-    // 加密文件
-    encryptFile(inputFile, outputFile, key);
 
     return 0;
 }
