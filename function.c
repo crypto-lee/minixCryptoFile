@@ -39,47 +39,23 @@ void adjust_key(unsigned char *user_key, unsigned char *adjusted_key)
     }
 }
 
-void pad_buf(unsigned char *buf, size_t size)
-{
-    // PKCS#7 padding
-    unsigned char pad_value = BLOCK_SIZE - size;
-    memset(buf + size, pad_value, pad_value);
-}
-
-size_t unpad_buf(unsigned char *buf)
-{
-    // PKCS#7 unpadding
-    unsigned char pad_value = buf[BLOCK_SIZE - 1];
-    for (int i = 0; i < pad_value; ++i)
-    {
-        if (buf[BLOCK_SIZE - 1 - i] != pad_value)
-        {
-            fprintf(stderr, "Invalid padding\n");
-            exit(1);
-        }
-    }
-    return BLOCK_SIZE - pad_value;
-}
-
 void *encrypt_thread(void *arg)
 {
     struct ThreadData *data = (struct ThreadData *)arg;
-    unsigned char input[BLOCK_SIZE], output[BLOCK_SIZE];
 
     while (1)
     {
-        size_t bytes_read = fread(input, 1, BLOCK_SIZE, data->input_file);
+        mthread_mutex_lock(&data->input_buffer->mutex);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        mthread_mutex_unlock(&data->input_buffer->mutex);
 
-        if (bytes_read < BLOCK_SIZE)
-        {
-            // 如果读取的字节数小于一个块的大小，我们需要对其进行填充
-            pad_buf(input, bytes_read);
-            // 然后我们再读取剩下的字节数，直到我们读满一个块的大小。
-            fread(input + bytes_read, 1, BLOCK_SIZE - bytes_read, data->input_file);
-        }
+        if (bytes_read == 0)
+            break;
 
-        AES_encrypt(input, output, data->key);
-        fwrite(output, 1, BLOCK_SIZE, data->output_file);
+        mthread_mutex_lock(&data->output_buffer->mutex);
+        AES_encrypt(data->input_buffer->data, data->output_buffer->data, data->key);
+        fwrite(data->output_buffer->data, 1, bytes_read, data->output_buffer->file);
+        mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
     return NULL;
@@ -88,17 +64,20 @@ void *encrypt_thread(void *arg)
 void *decrypt_thread(void *arg)
 {
     struct ThreadData *data = (struct ThreadData *)arg;
-    unsigned char input[BLOCK_SIZE], output[BLOCK_SIZE];
 
     while (1)
     {
-        size_t bytes_read = fread(input, 1, BLOCK_SIZE, data->input_file);
+        mthread_mutex_lock(&data->input_buffer->mutex);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        mthread_mutex_unlock(&data->input_buffer->mutex);
+
         if (bytes_read == 0)
             break;
 
-        AES_decrypt(input, output, data->key);
-        bytes_read = unpad_buf(output);
-        fwrite(output, 1, bytes_read, data->output_file);
+        mthread_mutex_lock(&data->output_buffer->mutex);
+        AES_decrypt(data->input_buffer->data, data->output_buffer->data, data->key);
+        fwrite(data->output_buffer->data, 1, bytes_read, data->output_buffer->file);
+        mthread_mutex_unlock(&data->output_buffer->mutex);
     }
 
     return NULL;
