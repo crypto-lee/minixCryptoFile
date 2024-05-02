@@ -20,7 +20,7 @@ struct Buffer
 {
     unsigned char data[BUFFER_SIZE];
     size_t size;
-    pthread_mutex_t mutex;
+    mthread_mutex_t mutex;
     pthread_cond_t cond_full;
     pthread_cond_t cond_empty;
 };
