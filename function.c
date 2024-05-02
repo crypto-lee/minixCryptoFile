@@ -74,10 +74,9 @@ int main(int argc, char **argv)
             fread(e, 1, 16, fp_encrypted);
             AES_decrypt(e, p, &key);
 
-            if (plaintext_size > 16)
-                fwrite(p, 1, 16, fp_plain);
-            else
-                fwrite(p, 1, plaintext_size, fp_plain);
+            // Adjust the number of bytes to write based on remaining bytes
+            int bytes_to_write = (plaintext_size >= 16) ? 16 : plaintext_size;
+            fwrite(p, 1, bytes_to_write, fp_plain);
 
             plaintext_size -= 16;
             if (plaintext_size <= 0)
