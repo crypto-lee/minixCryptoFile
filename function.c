@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include "/usr/inculde/openssl/aes.h"
+#include "/usr/include/openssl/aes.h"
 
 int main(int argc, char **argv)
 {

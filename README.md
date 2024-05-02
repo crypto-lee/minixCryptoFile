@@ -3,7 +3,7 @@ echo export TZ=Europe/Copenhagen > /etc/rc.timezone
 pkgin update
 pkgin install nano
 pkgin install openssh
-cp /use/pkg/etc/rc.d/sshd /etc/rc.d/
+cp /usr/pkg/etc/rc.d/sshd /etc/rc.d/
 nano /etc/rc.conf
 ```
 
