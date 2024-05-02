@@ -162,8 +162,8 @@ int main(int argc, char **argv)
         printf("decrypt!!");
         for (int i = 0; i < NUM_THREADS; ++i)
         {
-            thread_data[NUM_THREADS + i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
-            thread_data[NUM_THREADS + i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
+            thread_data[NUM_THREADS + i].input_buffer = &input_buffer;   // Input buffer is now the encrypted output
+            thread_data[NUM_THREADS + i].output_buffer = &output_buffer; // Output buffer is now the decrypted input
             thread_data[NUM_THREADS + i].key = &key;
             mthread_create(&threads[NUM_THREADS + i], NULL, decrypt_thread, &thread_data[NUM_THREADS + i]);
         }
