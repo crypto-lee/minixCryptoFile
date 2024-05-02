@@ -33,3 +33,12 @@ git config --global http.sslVerify false
 git clone https://github.com/crypto-lee/minixCryptoFile.git
 git pull
 ```
+
+clang
+
+```shell
+clang function.c -o function -lcrypto -L/usr/lib
+ ./function -e test.txt ttt.txt.cry 123456
+./function -d ttt.txt.cry dfsf.txt 123456
+
+```

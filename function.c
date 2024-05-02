@@ -6,6 +6,7 @@
 #include <openssl/aes.h>
 
 #define BLOCK_SIZE 16
+#define BUFFER_SIZE 1024
 #define NUM_THREADS 4
 
 struct ThreadData
@@ -15,15 +16,41 @@ struct ThreadData
     AES_KEY *key;
 };
 
+struct Buffer
+{
+    unsigned char data[BUFFER_SIZE];
+    size_t size;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond_full;
+    pthread_cond_t cond_empty;
+};
+
 void *encrypt_thread(void *arg)
 {
     struct ThreadData *data = (struct ThreadData *)arg;
-    unsigned char plain_block[BLOCK_SIZE], encrypted_block[BLOCK_SIZE];
 
-    while (fread(plain_block, 1, BLOCK_SIZE, data->input_file) == BLOCK_SIZE)
+    while (1)
     {
-        AES_encrypt(plain_block, encrypted_block, data->key);
-        fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_file);
+        pthread_mutex_lock(&data->input_file->mutex);
+        size_t bytes_read = fread(data->input_file->data, 1, BUFFER_SIZE, data->input_file);
+        pthread_mutex_unlock(&data->input_file->mutex);
+
+        if (bytes_read == 0)
+            break;
+
+        size_t num_blocks = bytes_read / BLOCK_SIZE;
+        for (size_t i = 0; i < num_blocks; ++i)
+        {
+            unsigned char plain_block[BLOCK_SIZE];
+            memcpy(plain_block, data->input_file->data + i * BLOCK_SIZE, BLOCK_SIZE);
+
+            unsigned char encrypted_block[BLOCK_SIZE];
+            AES_encrypt(plain_block, encrypted_block, data->key);
+
+            pthread_mutex_lock(&data->output_file->mutex);
+            fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_file);
+            pthread_mutex_unlock(&data->output_file->mutex);
+        }
     }
 
     return NULL;
@@ -32,12 +59,29 @@ void *encrypt_thread(void *arg)
 void *decrypt_thread(void *arg)
 {
     struct ThreadData *data = (struct ThreadData *)arg;
-    unsigned char encrypted_block[BLOCK_SIZE], decrypted_block[BLOCK_SIZE];
 
-    while (fread(encrypted_block, 1, BLOCK_SIZE, data->input_file) == BLOCK_SIZE)
+    while (1)
     {
-        AES_decrypt(encrypted_block, decrypted_block, data->key);
-        fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_file);
+        pthread_mutex_lock(&data->input_file->mutex);
+        size_t bytes_read = fread(data->input_file->data, 1, BUFFER_SIZE, data->input_file);
+        pthread_mutex_unlock(&data->input_file->mutex);
+
+        if (bytes_read == 0)
+            break;
+
+        size_t num_blocks = bytes_read / BLOCK_SIZE;
+        for (size_t i = 0; i < num_blocks; ++i)
+        {
+            unsigned char encrypted_block[BLOCK_SIZE];
+            memcpy(encrypted_block, data->input_file->data + i * BLOCK_SIZE, BLOCK_SIZE);
+
+            unsigned char decrypted_block[BLOCK_SIZE];
+            AES_decrypt(encrypted_block, decrypted_block, data->key);
+
+            pthread_mutex_lock(&data->output_file->mutex);
+            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_file);
+            pthread_mutex_unlock(&data->output_file->mutex);
+        }
     }
 
     return NULL;
@@ -74,36 +118,15 @@ int main(int argc, char **argv)
     mthread_thread_t threads[NUM_THREADS];
     struct ThreadData thread_data[NUM_THREADS];
 
-    int i;
-    if (!strcmp(argv[1], "-e"))
+    for (int i = 0; i < NUM_THREADS; ++i)
     {
-        for (i = 0; i < NUM_THREADS; ++i)
-        {
-            thread_data[i].input_file = fp_input;
-            thread_data[i].output_file = fp_output;
-            thread_data[i].key = &key;
-            pthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
-        }
-    }
-    else if (!strcmp(argv[1], "-d"))
-    {
-        for (i = 0; i < NUM_THREADS; ++i)
-        {
-            thread_data[i].input_file = fp_input;
-            thread_data[i].output_file = fp_output;
-            thread_data[i].key = &key;
-            pthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
-        }
-    }
-    else
-    {
-        fprintf(stderr, "Invalid option\n");
-        fclose(fp_input);
-        fclose(fp_output);
-        exit(1);
+        thread_data[i].input_file = fp_input;
+        thread_data[i].output_file = fp_output;
+        thread_data[i].key = &key;
+        pthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
     }
 
-    for (i = 0; i < NUM_THREADS; ++i)
+    for (int i = 0; i < NUM_THREADS; ++i)
     {
         pthread_join(threads[i], NULL);
     }
