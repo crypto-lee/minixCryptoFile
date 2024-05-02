@@ -11,18 +11,17 @@
 
 struct ThreadData
 {
-    FILE *input_file;
-    FILE *output_file;
+    struct Buffer *input_buffer;
+    struct Buffer *output_buffer;
     AES_KEY *key;
 };
 
 struct Buffer
 {
+    FILE *file;
     unsigned char data[BUFFER_SIZE];
     size_t size;
     mthread_mutex_t mutex;
-    mthread_cond_t cond_full;
-    mthread_cond_t cond_empty;
 };
 
 void *encrypt_thread(void *arg)
@@ -31,9 +30,10 @@ void *encrypt_thread(void *arg)
 
     while (1)
     {
-        pthread_mutex_lock(&data->input_file->mutex);
-        size_t bytes_read = fread(data->input_file->data, 1, BUFFER_SIZE, data->input_file);
-        pthread_mutex_unlock(&data->input_file->mutex);
+        mthread_mutex_lock(&data->input_buffer->mutex);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        data->input_buffer->size = bytes_read;
+        mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
@@ -42,14 +42,14 @@ void *encrypt_thread(void *arg)
         for (size_t i = 0; i < num_blocks; ++i)
         {
             unsigned char plain_block[BLOCK_SIZE];
-            memcpy(plain_block, data->input_file->data + i * BLOCK_SIZE, BLOCK_SIZE);
+            memcpy(plain_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
 
             unsigned char encrypted_block[BLOCK_SIZE];
             AES_encrypt(plain_block, encrypted_block, data->key);
 
-            pthread_mutex_lock(&data->output_file->mutex);
-            fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_file);
-            pthread_mutex_unlock(&data->output_file->mutex);
+            mthread_mutex_lock(&data->output_buffer->mutex);
+            fwrite(encrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+            mthread_mutex_unlock(&data->output_buffer->mutex);
         }
     }
 
@@ -62,9 +62,10 @@ void *decrypt_thread(void *arg)
 
     while (1)
     {
-        pthread_mutex_lock(&data->input_file->mutex);
-        size_t bytes_read = fread(data->input_file->data, 1, BUFFER_SIZE, data->input_file);
-        pthread_mutex_unlock(&data->input_file->mutex);
+        mthread_mutex_lock(&data->input_buffer->mutex);
+        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        data->input_buffer->size = bytes_read;
+        mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
             break;
@@ -73,14 +74,14 @@ void *decrypt_thread(void *arg)
         for (size_t i = 0; i < num_blocks; ++i)
         {
             unsigned char encrypted_block[BLOCK_SIZE];
-            memcpy(encrypted_block, data->input_file->data + i * BLOCK_SIZE, BLOCK_SIZE);
+            memcpy(encrypted_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
 
             unsigned char decrypted_block[BLOCK_SIZE];
             AES_decrypt(encrypted_block, decrypted_block, data->key);
 
-            pthread_mutex_lock(&data->output_file->mutex);
-            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_file);
-            pthread_mutex_unlock(&data->output_file->mutex);
+            mthread_mutex_lock(&data->output_buffer->mutex);
+            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
+            mthread_mutex_unlock(&data->output_buffer->mutex);
         }
     }
 
@@ -110,6 +111,9 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    struct Buffer input_buffer = {fp_input, {0}, 0, MTHREAD_MUTEX_INITIALIZER};
+    struct Buffer output_buffer = {fp_output, {0}, 0, MTHREAD_MUTEX_INITIALIZER};
+
     AES_KEY key;
     char user_key[17];
     strcpy(user_key, argv[4]);
@@ -120,8 +124,8 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < NUM_THREADS; ++i)
     {
-        thread_data[i].input_file = fp_input;
-        thread_data[i].output_file = fp_output;
+        thread_data[i].input_buffer = &input_buffer;
+        thread_data[i].output_buffer = &output_buffer;
         thread_data[i].key = &key;
         pthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
     }
