@@ -21,8 +21,8 @@ struct Buffer
     unsigned char data[BUFFER_SIZE];
     size_t size;
     mthread_mutex_t mutex;
-    pthread_cond_t cond_full;
-    pthread_cond_t cond_empty;
+    mthread_cond_t cond_full;
+    mthread_cond_t cond_empty;
 };
 
 void *encrypt_thread(void *arg)
