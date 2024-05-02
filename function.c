@@ -45,7 +45,7 @@ void *decrypt_thread(void *arg)
 
 int main(int argc, char **argv)
 {
-    if (argc != 6)
+    if (argc != 5)
     {
         fprintf(stderr, "参数输入错误\n");
         exit(1);
