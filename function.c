@@ -128,12 +128,12 @@ int main(int argc, char **argv)
         thread_data[i].input_buffer = &input_buffer;
         thread_data[i].output_buffer = &output_buffer;
         thread_data[i].key = &key;
-        pthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
+        mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
     }
 
     for (int i = 0; i < NUM_THREADS; ++i)
     {
-        pthread_join(threads[i], NULL);
+        mthread_join(threads[i], NULL);
     }
 
     fclose(fp_input);
