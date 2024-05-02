@@ -63,7 +63,8 @@ void *decrypt_thread(void *arg)
     while (1)
     {
         mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = data->input_buffer->size; // Read the actual size of data from the input buffer
+        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
+        data->input_buffer->size = bytes_read;
         mthread_mutex_unlock(&data->input_buffer->mutex);
 
         if (bytes_read == 0)
