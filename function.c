@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <minix/mthread.h>
-#include "/usr/include/openssl/aes.h"
+#include <openssl/aes.h>
 
 #define BLOCK_SIZE 16
 #define NUM_THREADS 4
