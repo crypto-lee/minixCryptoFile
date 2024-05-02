@@ -56,38 +56,6 @@ void *encrypt_thread(void *arg)
     return NULL;
 }
 
-void *decrypt_thread(void *arg)
-{
-    struct ThreadData *data = (struct ThreadData *)arg;
-
-    while (1)
-    {
-        mthread_mutex_lock(&data->input_buffer->mutex);
-        size_t bytes_read = fread(data->input_buffer->data, 1, BUFFER_SIZE, data->input_buffer->file);
-        data->input_buffer->size = bytes_read;
-        mthread_mutex_unlock(&data->input_buffer->mutex);
-
-        if (bytes_read == 0)
-            break;
-
-        size_t num_blocks = bytes_read / BLOCK_SIZE;
-        for (size_t i = 0; i < num_blocks; ++i)
-        {
-            unsigned char encrypted_block[BLOCK_SIZE];
-            memcpy(encrypted_block, data->input_buffer->data + i * BLOCK_SIZE, BLOCK_SIZE);
-
-            unsigned char decrypted_block[BLOCK_SIZE];
-            AES_decrypt(encrypted_block, decrypted_block, data->key);
-
-            mthread_mutex_lock(&data->output_buffer->mutex);
-            fwrite(decrypted_block, 1, BLOCK_SIZE, data->output_buffer->file);
-            mthread_mutex_unlock(&data->output_buffer->mutex);
-        }
-    }
-
-    return NULL;
-}
-
 int main(int argc, char **argv)
 {
     if (argc != 5)
@@ -111,12 +79,19 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    struct Buffer input_buffer = {fp_input, {0}, 0, PTHREAD_MUTEX_INITIALIZER};
-    struct Buffer output_buffer = {fp_output, {0}, 0, PTHREAD_MUTEX_INITIALIZER};
+    struct Buffer input_buffer;
+    input_buffer.file = fp_input;
+    input_buffer.size = 0;
+    mthread_mutex_init(&input_buffer.mutex, NULL);
+
+    struct Buffer output_buffer;
+    output_buffer.file = fp_output;
+    output_buffer.size = 0;
+    mthread_mutex_init(&output_buffer.mutex, NULL);
 
     AES_KEY key;
-    unsigned char user_key[17];        // Changed to unsigned char
-    strcpy((char *)user_key, argv[4]); // Cast to char *
+    unsigned char user_key[17];
+    strcpy((char *)user_key, argv[4]);
 
     AES_set_encrypt_key(user_key, 128, &key);
 
