@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <mthread.h>
+#include <minix/mthread.h>
 #include "/usr/include/openssl/aes.h"
 
 #define BLOCK_SIZE 16
