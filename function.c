@@ -111,8 +111,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    struct Buffer input_buffer = {fp_input, {0}, 0, MTHREAD_MUTEX_INITIALIZER};
-    struct Buffer output_buffer = {fp_output, {0}, 0, MTHREAD_MUTEX_INITIALIZER};
+    struct Buffer input_buffer = {fp_input, {0}, 0, PTHREAD_MUTEX_INITIALIZER};
+    struct Buffer output_buffer = {fp_output, {0}, 0, PTHREAD_MUTEX_INITIALIZER};
 
     AES_KEY key;
     unsigned char user_key[17];        // Changed to unsigned char
