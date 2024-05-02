@@ -127,9 +127,10 @@ int main(int argc, char **argv)
 
     AES_set_encrypt_key(user_key, 128, &key);
 
-    mthread_thread_t threads[NUM_THREADS];
-    struct ThreadData thread_data[NUM_THREADS];
+    mthread_thread_t threads[NUM_THREADS * 2];
+    struct ThreadData thread_data[NUM_THREADS * 2];
 
+    // Create encryption threads
     for (int i = 0; i < NUM_THREADS; ++i)
     {
         thread_data[i].input_buffer = &input_buffer;
@@ -138,7 +139,17 @@ int main(int argc, char **argv)
         mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
     }
 
+    // Create decryption threads
     for (int i = 0; i < NUM_THREADS; ++i)
+    {
+        thread_data[NUM_THREADS + i].input_buffer = &output_buffer; // Input buffer is now the encrypted output
+        thread_data[NUM_THREADS + i].output_buffer = &input_buffer; // Output buffer is now the decrypted input
+        thread_data[NUM_THREADS + i].key = &key;
+        mthread_create(&threads[NUM_THREADS + i], NULL, decrypt_thread, &thread_data[NUM_THREADS + i]);
+    }
+
+    // Wait for all threads to finish
+    for (int i = 0; i < NUM_THREADS * 2; ++i)
     {
         mthread_join(threads[i], NULL);
     }
