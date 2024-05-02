@@ -6,26 +6,6 @@
 
 int main(int argc, char **argv)
 {
-    /*
-       char user_key[AES_BLOCK_SIZE] = "abc123";
-       AES_KEY key;
-
-       char p_msq[16] = "abcdefghijkl";
-       char e_msq[17];
-
-       AES_set_encrypt_key(user_key, AES_BLOCK_SIZE*8, &key);
-
-       AES_encrypt(p_msq, e_msq, &key);
-
-       printf("%s\n",e_msq);
-
-       char msg[16];
-
-       AES_set_decrypt_key(user_key, 128, &key);
-       AES_decrypt(e_msq, msg, &key);
-
-       printf("%s\n",msg);
-     */
     if (5 != argc)
     {
         fprintf(stderr, "参数输入错误\n");
@@ -52,6 +32,14 @@ int main(int argc, char **argv)
         strcpy(user_key, argv[3]);
         AES_set_encrypt_key(user_key, 128, &key);
 
+        // Get the size of the plaintext file
+        fseek(fp_plain, 0, SEEK_END);
+        long plaintext_size = ftell(fp_plain);
+        fseek(fp_plain, 0, SEEK_SET);
+
+        // Write the plaintext size to the encrypted file
+        fwrite(&plaintext_size, sizeof(plaintext_size), 1, fp_encrypted);
+
         while (res = fread(p, 1, 16, fp_plain))
         {
             AES_encrypt(p, e, &key);
@@ -59,19 +47,14 @@ int main(int argc, char **argv)
             if (res < 16)
                 break;
         }
-        if (res == 0)
-            res = 16;
-        sprintf(p, "%d", res);
-        AES_encrypt(p, e, &key);
-        fwrite(e, 1, 16, fp_encrypted);
 
         fclose(fp_plain);
         fclose(fp_encrypted);
     }
     else if (!strcmp(argv[4], "-d"))
     {
-        int len = 0;
-        long end = 0;
+        long plaintext_size = 0;
+
         fp_encrypted = fopen(argv[1], "rb");
         if (NULL == fp_encrypted)
         {
@@ -83,23 +66,22 @@ int main(int argc, char **argv)
         strcpy(user_key, argv[3]);
         AES_set_decrypt_key(user_key, 128, &key);
 
-        fseek(fp_encrypted, -16, SEEK_END);
-        end = ftell(fp_encrypted);
-        fread(e, 1, 16, fp_encrypted);
-        AES_decrypt(e, p, &key);
-        len = atoi(p);
-        rewind(fp_encrypted);
+        // Read the plaintext size from the encrypted file
+        fread(&plaintext_size, sizeof(plaintext_size), 1, fp_encrypted);
 
         while (1)
         {
             fread(e, 1, 16, fp_encrypted);
             AES_decrypt(e, p, &key);
-            if (end == ftell(fp_encrypted))
-            {
-                fwrite(p, 1, len, fp_plain);
+
+            if (plaintext_size > 16)
+                fwrite(p, 1, 16, fp_plain);
+            else
+                fwrite(p, 1, plaintext_size, fp_plain);
+
+            plaintext_size -= 16;
+            if (plaintext_size <= 0)
                 break;
-            }
-            fwrite(p, 1, 16, fp_plain);
         }
 
         fclose(fp_plain);
