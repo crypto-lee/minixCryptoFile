@@ -91,6 +91,7 @@ void *encrypt_thread(void *thread_arg)
     if (data->last_block)
     {
         // Encrypt remaining bytes count and append to output buffer
+        printf("last_block!!!!!!!!!!!\n");
         if (bytes_to_read == 0)
         {
             bytes_to_read = BLOCK_SIZE;
@@ -133,10 +134,11 @@ void *decrypt_thread(void *thread_arg)
         print_buffer(d);
         printf("size_copy%d\n", size_copy);
         last_block_size = atoi(d);
-        size_copy -= BLOCK_SIZE;
+        // size_copy -= BLOCK_SIZE;
         printf("Decrypted data: %s\n", d);
         memset(p, 0, BLOCK_SIZE);
         memset(d, 0, BLOCK_SIZE);
+        printf("last block!!!!!!!!!!\n");
     }
 
     while (size_copy > 0)
@@ -238,7 +240,7 @@ int main(int argc, char **argv)
     int num_threads = file_size / BLOCK_SIZE;
     if (strcmp(argv[1], "-d") == 0)
     {
-        num_threads /= 2;
+        num_threads = file_size / BLOCK_SIZE / 2;
     }
     if (file_size % BLOCK_SIZE != 0)
     {
@@ -265,7 +267,7 @@ int main(int argc, char **argv)
         printf("\nEncrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
-            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE, fp_input);
+            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE * 2, fp_input);
             if (thread_data[i].input_buffer->size == 0)
             {
                 printf("\nNo data to read\n");
