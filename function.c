@@ -44,8 +44,8 @@ void print_buffer(unsigned char ciphertext[16])
     {
         printf("%02x", ciphertext[i]);
     }
-    printf("\n");
-    printf("ciphertext:%s\n", ciphertext);
+    // printf("\n");
+    // printf("ciphertext:%s\n", ciphertext);
 }
 
 void *encrypt_thread(void *thread_arg)
@@ -70,16 +70,17 @@ void *encrypt_thread(void *thread_arg)
         // Read data from input buffer
         bytes_to_read = size_copy < BLOCK_SIZE ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
+        memcpy(data->output_buffer->data + effset, e, BLOCK_SIZE);
+        AES_encrypt(p, e, data->key);
         size_copy -= bytes_to_read;
         effset += bytes_to_read;
         // Encrypt data
 
-        AES_encrypt(p, e, data->key);
         printf("wf\n");
         print_buffer(p);
         print_buffer(e);
         // Write encrypted data to output buffer
-        memcpy(data->output_buffer->data + effset, e, BLOCK_SIZE);
+
         data->output_buffer->size += BLOCK_SIZE;
         memset(p, 0, BLOCK_SIZE);
         memset(e, 0, BLOCK_SIZE);
