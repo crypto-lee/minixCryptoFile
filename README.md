@@ -37,8 +37,9 @@ git pull
 clang
 
 ```shell
-clang function.c -o function -lcrypto -L/usr/lib
- ./function -e test.txt ttt.txt.cry 123456
-./function -d ttt.txt.cry dfsf.txt 123456
+cd /home/project/minixCryptoFile
+clang function.c -o function -lmthread -lcrypto -L/usr/lib
+ ./function -e test.txt ttt.txt.cry abcdefghijklmnop
+./function -d ttt.txt.cry dfsf.txt abcdefghijklmnop
 
 ```
