@@ -19,7 +19,7 @@ struct ThreadData
 
 struct Buffer
 {
-    unsigned char data[18];
+    unsigned char data[32];
     size_t size;
 };
 
@@ -40,11 +40,11 @@ void adjust_key(const unsigned char *user_key, unsigned char *adjusted_key)
 void print_buffer(unsigned char ciphertext[16])
 {
     printf("Encrypted: ");
-    for (int i = 0; i < 18; ++i)
+    for (int i = 0; i < 32; ++i)
     {
         printf("%02x", ciphertext[i]);
     }
-    // printf("\n");
+    printf("\n");
     // printf("ciphertext:%s\n", ciphertext);
 }
 
@@ -70,8 +70,8 @@ void *encrypt_thread(void *thread_arg)
         // Read data from input buffer
         bytes_to_read = size_copy < BLOCK_SIZE ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
-        memcpy(data->output_buffer->data + effset, e, BLOCK_SIZE);
         AES_encrypt(p, e, data->key);
+        memcpy(data->output_buffer->data + effset, e, BLOCK_SIZE);
         size_copy -= bytes_to_read;
         effset += bytes_to_read;
         // Encrypt data
@@ -85,6 +85,7 @@ void *encrypt_thread(void *thread_arg)
         memset(p, 0, BLOCK_SIZE);
         memset(e, 0, BLOCK_SIZE);
         print_buffer(data->output_buffer->data);
+        printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
     if (data->last_block)
@@ -105,6 +106,7 @@ void *encrypt_thread(void *thread_arg)
         size_copy += BLOCK_SIZE;
         data->output_buffer->size += BLOCK_SIZE;
         print_buffer(data->output_buffer->data);
+        printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
     return NULL;
@@ -121,19 +123,21 @@ void *decrypt_thread(void *thread_arg)
     size_t size_copy = data->input_buffer->size;
     int last_block_size = 0;
 
-    // if (data->last_block)
-    // {
-    //     // 解密最后一个块的大小
-    //     bytes_to_read = BLOCK_SIZE;
-    //     memcpy(p, data->input_buffer->data + (size_copy - BLOCK_SIZE), BLOCK_SIZE);
-    //     print_buffer(p);
-    //     AES_decrypt(p, d, data->key);
-    //     last_block_size = atoi(d);
-    //     size_copy -= BLOCK_SIZE;
-    //     printf("Decrypted data: %s\n", d);
-    //     memset(p, 0, BLOCK_SIZE);
-    //     memset(d, 0, BLOCK_SIZE);
-    // }
+    if (data->last_block)
+    {
+        // 解密最后一个块的大小
+        bytes_to_read = BLOCK_SIZE;
+        memcpy(p, data->input_buffer->data + (size_copy - BLOCK_SIZE), BLOCK_SIZE);
+        print_buffer(p);
+        AES_decrypt(p, d, data->key);
+        print_buffer(d);
+        printf("size_copy%d\n", size_copy);
+        last_block_size = atoi(d);
+        size_copy -= BLOCK_SIZE;
+        printf("Decrypted data: %s\n", d);
+        memset(p, 0, BLOCK_SIZE);
+        memset(d, 0, BLOCK_SIZE);
+    }
 
     while (size_copy > 0)
     {
@@ -142,8 +146,7 @@ void *decrypt_thread(void *thread_arg)
         printf("Size copy: %d\n", size_copy);
         bytes_to_read = (size_copy < BLOCK_SIZE) ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
-        size_copy -= bytes_to_read;
-        effset += bytes_to_read;
+
         // 解密数据
         printf("Decrypting data\n");
         print_buffer(p);
@@ -161,6 +164,8 @@ void *decrypt_thread(void *thread_arg)
             memcpy(data->output_buffer->data + effset, d, BLOCK_SIZE);
             data->output_buffer->size += BLOCK_SIZE;
         }
+        size_copy -= bytes_to_read;
+        effset += bytes_to_read;
         memset(p, 0, BLOCK_SIZE);
         memset(d, 0, BLOCK_SIZE);
     }
@@ -230,8 +235,12 @@ int main(int argc, char **argv)
     // 计算线程数量
     fseek(fp_input, 0, SEEK_END);
     size_t file_size = ftell(fp_input);
-    int num_threads = file_size / BUFFER_SIZE;
-    if (file_size % BUFFER_SIZE != 0)
+    int num_threads = file_size / BLOCK_SIZE;
+    if (strcmp(argv[1], "-d") == 0)
+    {
+        num_threads /= 2;
+    }
+    if (file_size % BLOCK_SIZE != 0)
     {
         num_threads++;
     }
@@ -256,7 +265,7 @@ int main(int argc, char **argv)
         printf("\nEncrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
-            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BUFFER_SIZE, fp_input);
+            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE, fp_input);
             if (thread_data[i].input_buffer->size == 0)
             {
                 printf("\nNo data to read\n");
@@ -276,7 +285,7 @@ int main(int argc, char **argv)
         printf("\nDecrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
-            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BUFFER_SIZE, fp_input);
+            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE * 2, fp_input);
             if (thread_data[i].input_buffer->size == 0)
             {
                 break;
