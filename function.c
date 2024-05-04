@@ -76,16 +76,16 @@ void *encrypt_thread(void *thread_arg)
         effset += bytes_to_read;
         // Encrypt data
 
-        printf("wf\n");
-        print_buffer(p);
-        print_buffer(e);
+        // printf("wf\n");
+        // print_buffer(p);
+        // print_buffer(e);
         // Write encrypted data to output buffer
 
         data->output_buffer->size += BLOCK_SIZE;
         memset(p, 0, BLOCK_SIZE);
         memset(e, 0, BLOCK_SIZE);
         print_buffer(data->output_buffer->data);
-        printf("out_buff_size%d\n", data->output_buffer->size);
+        // printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
     if (data->last_block)
@@ -144,16 +144,16 @@ void *decrypt_thread(void *thread_arg)
     while (size_copy > 0)
     {
         // Reads data from the input buffer
-        print_buffer(data->input_buffer->data);
+        // print_buffer(data->input_buffer->data);
         printf("Size copy: %d\n", size_copy);
         bytes_to_read = (size_copy < BLOCK_SIZE) ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
 
         // Decrypt the data
         printf("Decrypting data\n");
-        print_buffer(p);
+        // print_buffer(p);
         AES_decrypt(p, d, data->key);
-        print_buffer(d);
+        // print_buffer(d);
 
         // Write the decrypted data to the output buffer
         if (data->last_block && size_copy == 0)
@@ -278,6 +278,7 @@ int main(int argc, char **argv)
             thread_data[i].key = &key;
             AES_set_encrypt_key(adjusted_key, 128, thread_data[i].key);
             mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
+            printf("\nThread %d created\n", i);
         }
     }
     else if (strcmp(argv[1], "-d") == 0)
@@ -296,14 +297,14 @@ int main(int argc, char **argv)
             AES_set_decrypt_key(adjusted_key, 128, thread_data[i].key);
             thread_data[i].output_buffer->size = 0;
             thread_data[i].last_block = (i == num_threads - 1); // Set last_block to true for the last thread
-            printf("last_block:%d\n", thread_data[i].last_block);
+            // printf("last_block:%d\n", thread_data[i].last_block);
             mthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
             printf("\nThread %d created\n", i);
         }
     }
     else
     {
-        fprintf(stderr, "无效的参数\n");
+        fprintf(stderr, "Parameter input error\n");
         fclose(fp_input);
         fclose(fp_output);
         exit(1);
