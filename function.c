@@ -23,7 +23,7 @@ struct Buffer
     size_t size;
 };
 
-// 将密钥调整为 16 字节，不足部分用 0 补齐，超出部分截断
+// The key is adjusted to 16 bytes, the insufficient part is filled with 0, and the excess part is truncated
 void adjust_key(const unsigned char *user_key, unsigned char *adjusted_key)
 {
     int len = strlen((char *)user_key);
@@ -55,7 +55,7 @@ void *encrypt_thread(void *thread_arg)
     unsigned char e[BLOCK_SIZE];
     memset(p, 0, BLOCK_SIZE);
     memset(e, 0, BLOCK_SIZE);
-    size_t effset = 0; // 每次开始读或写的位置
+    size_t effset = 0; // Where to start reading or writing each time
     size_t bytes_to_read = 0;
     size_t size_copy = data->input_buffer->size;
 
@@ -119,14 +119,14 @@ void *decrypt_thread(void *thread_arg)
     unsigned char p[BLOCK_SIZE], d[BLOCK_SIZE];
     memset(p, 0, BLOCK_SIZE);
     memset(d, 0, BLOCK_SIZE);
-    size_t effset = 0; // 每次开始读或写的位置
+    size_t effset = 0; // Where to start reading or writing each time
     size_t bytes_to_read = 0;
     size_t size_copy = data->input_buffer->size;
     int last_block_size = 0;
 
     if (data->last_block)
     {
-        // 解密最后一个块的大小
+        // Decrypt the size of the last block
         bytes_to_read = BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + (size_copy - BLOCK_SIZE), BLOCK_SIZE);
         print_buffer(p);
@@ -143,19 +143,19 @@ void *decrypt_thread(void *thread_arg)
 
     while (size_copy > 0)
     {
-        // 从输入缓冲区读取数据
+        // Reads data from the input buffer
         print_buffer(data->input_buffer->data);
         printf("Size copy: %d\n", size_copy);
         bytes_to_read = (size_copy < BLOCK_SIZE) ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
 
-        // 解密数据
+        // Decrypt the data
         printf("Decrypting data\n");
         print_buffer(p);
         AES_decrypt(p, d, data->key);
         print_buffer(d);
 
-        // 写入解密后的数据到输出缓冲区
+        // Write the decrypted data to the output buffer
         if (data->last_block && size_copy == 0)
         {
             memcpy(data->output_buffer->data + effset, d, last_block_size);
@@ -175,7 +175,6 @@ void *decrypt_thread(void *thread_arg)
     return NULL;
 }
 
-// 加密解密函数
 void encrypt_decrypt_string(const unsigned char *key)
 {
     const unsigned char plaintext[] = "hello world!";
@@ -184,7 +183,7 @@ void encrypt_decrypt_string(const unsigned char *key)
     AES_set_encrypt_key(key, 128, &aes_key);
     AES_encrypt(plaintext, ciphertext, &aes_key);
 
-    // 打印加密后的结果（以十六进制字符串形式）
+    // Print the encrypted result (as a hexadecimal string)
     printf("Encrypted: ");
     for (int i = 0; i < AES_BLOCK_SIZE; ++i)
     {
@@ -201,11 +200,11 @@ int main(int argc, char **argv)
 {
     if (argc != 5)
     {
-        fprintf(stderr, "参数输入错误\n");
+        fprintf(stderr, "Parameter input error\n");
         exit(1);
     }
 
-    // 打印每个命令行参数
+    // Prints each command line argument
     for (int i = 0; i < argc; ++i)
     {
         printf("Argument %d: %s\n", i, argv[i]);
@@ -215,7 +214,7 @@ int main(int argc, char **argv)
     unsigned char adjusted_key[17];
     strcpy((char *)user_key, argv[4]);
 
-    // 调整密钥长度为 16 字节
+    // Change the key length to 16 bytes
     adjust_key(user_key, adjusted_key);
     encrypt_decrypt_string(adjusted_key);
 
@@ -234,7 +233,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    // 计算线程数量
+    // Count the thread count
     fseek(fp_input, 0, SEEK_END);
     size_t file_size = ftell(fp_input);
     int num_threads = file_size / BLOCK_SIZE;
@@ -250,7 +249,7 @@ int main(int argc, char **argv)
     mthread_thread_t threads[num_threads];
     struct ThreadData thread_data[num_threads];
 
-    // 初始化线程数据结构
+    // Initializes the thread data structure
     for (int i = 0; i < num_threads; ++i)
     {
         thread_data[i] = *(struct ThreadData *)malloc(sizeof(struct ThreadData));
@@ -258,12 +257,12 @@ int main(int argc, char **argv)
         thread_data[i].output_buffer = (struct Buffer *)malloc(sizeof(struct Buffer));
     }
 
-    // 重置文件指针
+    // Reset the file pointer
     fseek(fp_input, 0, SEEK_SET);
 
     if (strcmp(argv[1], "-e") == 0)
     {
-        // 创建加密线程
+        // Create an encrypted thread
         printf("\nEncrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
@@ -283,7 +282,7 @@ int main(int argc, char **argv)
     }
     else if (strcmp(argv[1], "-d") == 0)
     {
-        // 创建解密线程
+        // Create a decryption thread
         printf("\nDecrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
@@ -310,13 +309,13 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    // 等待所有线程完成
+    // Wait for all threads to finish
     for (int i = 0; i < num_threads; ++i)
     {
         mthread_join(threads[i], NULL);
     }
 
-    // // 将输出缓冲区的数据写入输出文件
+    // writes the data from the output buffer to the output file
     for (int i = 0; i < num_threads; ++i)
     {
         printf("\nWriting to output file...\n");
@@ -324,11 +323,11 @@ int main(int argc, char **argv)
         fwrite(thread_data[i].output_buffer->data, 1, thread_data[i].output_buffer->size, fp_output);
     }
 
-    // 关闭文件
+    // Close the file
     fclose(fp_input);
     fclose(fp_output);
 
-    // // 释放内存
+    //  Free memory
     // for (int i = 0; i < num_threads; ++i)
     // {
     //     free(thread_data[i].input_buffer);
