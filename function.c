@@ -8,7 +8,7 @@
 #include <stdbool.h>
 
 #define BLOCK_SIZE 16
-#define BUFFER_SIZE 10240
+#define BUFFER_SIZE 320000
 
 struct ThreadData
 {
@@ -96,8 +96,8 @@ void *encrypt_thread(void *thread_arg)
 
         // printf("wf\n");
         // print_buffer(p);
-        write_log("encrypt_thread:p", p, BLOCK_SIZE);
-        write_log("encrypt_thread:e", e, BLOCK_SIZE);
+        // write_log("encrypt_thread:p", p, BLOCK_SIZE);
+        // write_log("encrypt_thread:e", e, BLOCK_SIZE);
         // print_buffer(e);
         // Write encrypted data to output buffer
 
@@ -105,7 +105,7 @@ void *encrypt_thread(void *thread_arg)
         memset(p, 0, BLOCK_SIZE);
         memset(e, 0, BLOCK_SIZE);
         // print_buffer(data->output_buffer->data);
-        write_log("encrypt_thread:output_buffer", data->output_buffer->data, data->output_buffer->size);
+        // write_log("encrypt_thread:output_buffer", data->output_buffer->data, data->output_buffer->size);
         // printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
@@ -170,17 +170,17 @@ void *decrypt_thread(void *thread_arg)
     {
         // Reads data from the input buffer
         // print_buffer(data->input_buffer->data);
-        printf("Size copy: %d\n", size_copy);
+        // printf("Size copy: %d\n", size_copy);
         bytes_to_read = (size_copy < BLOCK_SIZE) ? size_copy : BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
 
         // Decrypt the data
         // printf("Decrypting data\n");
         // print_buffer(p);
-        write_log("decrypt_thread:p", p, BLOCK_SIZE);
+        // write_log("decrypt_thread:p", p, BLOCK_SIZE);
         AES_decrypt(p, d, data->key);
         // print_buffer(d);
-        write_log("decrypt_thread:d", d, BLOCK_SIZE);
+        // write_log("decrypt_thread:d", d, BLOCK_SIZE);
 
         // Write the decrypted data to the output buffer
         if (data->last_block && size_copy == 0)
@@ -263,12 +263,8 @@ int main(int argc, char **argv)
     // Count the thread count
     fseek(fp_input, 0, SEEK_END);
     size_t file_size = ftell(fp_input);
-    int num_threads = file_size / BLOCK_SIZE;
-    if (strcmp(argv[1], "-d") == 0)
-    {
-        num_threads = file_size / BLOCK_SIZE / 2;
-    }
-    if (file_size % BLOCK_SIZE != 0)
+    int num_threads = file_size / BUFFER_SIZE;
+    if (file_size % BUFFER_SIZE != 0)
     {
         num_threads++;
     }
@@ -305,7 +301,7 @@ int main(int argc, char **argv)
             thread_data[i].key = &key;
             AES_set_encrypt_key(adjusted_key, 128, thread_data[i].key);
             mthread_create(&threads[i], NULL, encrypt_thread, &thread_data[i]);
-            printf("\nThread %d created\n", i);
+            // printf("\nThread %d created\n", i);
         }
     }
     else if (strcmp(argv[1], "-d") == 0)
@@ -326,7 +322,7 @@ int main(int argc, char **argv)
             thread_data[i].last_block = (i == num_threads - 1); // Set last_block to true for the last thread
             // printf("last_block:%d\n", thread_data[i].last_block);
             mthread_create(&threads[i], NULL, decrypt_thread, &thread_data[i]);
-            printf("\nThread %d created\n", i);
+            // printf("\nThread %d created\n", i);
         }
     }
     else
@@ -347,7 +343,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < num_threads; ++i)
     {
         // printf("\nWriting to output file...\n");
-        write_log("output_buffer", thread_data[i].output_buffer->data, thread_data[i].output_buffer->size);
+        // write_log("output_file", thread_data[i].output_buffer->data, thread_data[i].output_buffer->size);
         // print_buffer(thread_data[i].output_buffer->data);
         fwrite(thread_data[i].output_buffer->data, 1, thread_data[i].output_buffer->size, fp_output);
     }
@@ -359,10 +355,24 @@ int main(int argc, char **argv)
     // Free memory
     for (int i = 0; i < num_threads; ++i)
     {
-        free(thread_data[i].input_buffer);
-        free(thread_data[i].output_buffer);
-        free(&thread_data[i]);
+        if (thread_data[i].input_buffer != NULL)
+        {
+            free(thread_data[i].input_buffer);
+            thread_data[i].input_buffer = NULL; // Set pointer to NULL to avoid dangling pointer
+        }
+        if (thread_data[i].output_buffer != NULL)
+        {
+            free(thread_data[i].output_buffer);
+            thread_data[i].output_buffer = NULL; // Set pointer to NULL to avoid dangling pointer
+        }
     }
+
+    // // Free the array of thread_data structures
+    // if (thread_data != NULL)
+    // {
+    //     free(thread_data);
+    //     thread_data = NULL; // Set pointer to NULL to avoid dangling pointer
+    // }
 
     return 0;
 }
