@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 #include <errno.h>
 #include <minix/mthread.h>
 #include <openssl/aes.h>
@@ -37,15 +38,32 @@ void adjust_key(const unsigned char *user_key, unsigned char *adjusted_key)
         memcpy(adjusted_key, user_key, 16);
     }
 }
-void print_buffer(unsigned char ciphertext[16])
+void write_log(const char *message, const unsigned char *data, size_t size)
 {
-    printf("Encrypted: ");
-    for (int i = 0; i < 32; ++i)
+    FILE *fp;
+    fp = fopen("log.txt", "a"); // Open the file in append mode
+    if (fp == NULL)
     {
-        printf("%02x", ciphertext[i]);
+        printf("Error opening file!\n");
+        return;
     }
-    printf("\n");
-    // printf("ciphertext:%s\n", ciphertext);
+
+    // get time
+    time_t rawtime;
+    struct tm *timeinfo;
+    char timestamp[20];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
+
+    fprintf(fp, "[%s] %s: ", timestamp, message);
+    for (size_t i = 0; i < size; ++i)
+    {
+        fprintf(fp, "%02x", data[i]);
+    }
+    fprintf(fp, "\n");
+
+    fclose(fp);
 }
 
 void *encrypt_thread(void *thread_arg)
@@ -78,13 +96,16 @@ void *encrypt_thread(void *thread_arg)
 
         // printf("wf\n");
         // print_buffer(p);
+        write_log("encrypt_thread:p", p, BLOCK_SIZE);
+        write_log("encrypt_thread:e", e, BLOCK_SIZE);
         // print_buffer(e);
         // Write encrypted data to output buffer
 
         data->output_buffer->size += BLOCK_SIZE;
         memset(p, 0, BLOCK_SIZE);
         memset(e, 0, BLOCK_SIZE);
-        print_buffer(data->output_buffer->data);
+        // print_buffer(data->output_buffer->data);
+        write_log("encrypt_thread:output_buffer", data->output_buffer->data, data->output_buffer->size);
         // printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
@@ -97,16 +118,18 @@ void *encrypt_thread(void *thread_arg)
             bytes_to_read = BLOCK_SIZE;
         }
         sprintf(p, "%d", bytes_to_read);
-        printf("if\n");
         AES_encrypt(p, e, data->key);
-        print_buffer(p);
-        print_buffer(e);
+        write_log("encrypt_thread last block:p", p, BLOCK_SIZE);
+        write_log("encrypt_thread last block:e", e, BLOCK_SIZE);
+        // print_buffer(p);
+        // print_buffer(e);
         size_copy = data->output_buffer->size;
         // Write encrypted bytes count to output buffer
         memcpy(data->output_buffer->data + size_copy, e, BLOCK_SIZE);
         size_copy += BLOCK_SIZE;
         data->output_buffer->size += BLOCK_SIZE;
-        print_buffer(data->output_buffer->data);
+        // print_buffer(data->output_buffer->data);
+        write_log("encrypt_thread last block:output_buffer", data->output_buffer->data, data->output_buffer->size);
         printf("out_buff_size%d\n", data->output_buffer->size);
     }
 
@@ -129,9 +152,11 @@ void *decrypt_thread(void *thread_arg)
         // Decrypt the size of the last block
         bytes_to_read = BLOCK_SIZE;
         memcpy(p, data->input_buffer->data + (size_copy - BLOCK_SIZE), BLOCK_SIZE);
-        print_buffer(p);
+        // print_buffer(p);
+        write_log("decrypt_thread:p", p, BLOCK_SIZE);
         AES_decrypt(p, d, data->key);
-        print_buffer(d);
+        // print_buffer(d);
+        write_log("decrypt_thread:d", d, BLOCK_SIZE);
         printf("size_copy%d\n", size_copy);
         last_block_size = atoi(d);
         // size_copy -= BLOCK_SIZE;
@@ -150,10 +175,12 @@ void *decrypt_thread(void *thread_arg)
         memcpy(p, data->input_buffer->data + effset, bytes_to_read);
 
         // Decrypt the data
-        printf("Decrypting data\n");
+        // printf("Decrypting data\n");
         // print_buffer(p);
+        write_log("decrypt_thread:p", p, BLOCK_SIZE);
         AES_decrypt(p, d, data->key);
         // print_buffer(d);
+        write_log("decrypt_thread:d", d, BLOCK_SIZE);
 
         // Write the decrypted data to the output buffer
         if (data->last_block && size_copy == 0)
@@ -319,8 +346,9 @@ int main(int argc, char **argv)
     // writes the data from the output buffer to the output file
     for (int i = 0; i < num_threads; ++i)
     {
-        printf("\nWriting to output file...\n");
-        print_buffer(thread_data[i].output_buffer->data);
+        // printf("\nWriting to output file...\n");
+        write_log("output_buffer", thread_data[i].output_buffer->data, thread_data[i].output_buffer->size);
+        // print_buffer(thread_data[i].output_buffer->data);
         fwrite(thread_data[i].output_buffer->data, 1, thread_data[i].output_buffer->size, fp_output);
     }
 
@@ -328,13 +356,13 @@ int main(int argc, char **argv)
     fclose(fp_input);
     fclose(fp_output);
 
-    //  Free memory
-    // for (int i = 0; i < num_threads; ++i)
-    // {
-    //     free(thread_data[i].input_buffer);
-    //     free(thread_data[i].output_buffer);
-    //     free(&thread_data[i]);
-    // }
+    // Free memory
+    for (int i = 0; i < num_threads; ++i)
+    {
+        free(thread_data[i].input_buffer);
+        free(thread_data[i].output_buffer);
+        free(&thread_data[i]);
+    }
 
     return 0;
 }
