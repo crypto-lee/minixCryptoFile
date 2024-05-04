@@ -20,7 +20,7 @@ struct ThreadData
 
 struct Buffer
 {
-    unsigned char data[32];
+    unsigned char data[BUFFER_SIZE];
     size_t size;
 };
 
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
         printf("\nEncrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
-            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE * 2, fp_input);
+            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BUFFER_SIZE, fp_input);
             if (thread_data[i].input_buffer->size == 0)
             {
                 printf("\nNo data to read\n");
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
         printf("\nDecrypting...\n");
         for (int i = 0; i < num_threads; ++i)
         {
-            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BLOCK_SIZE * 2, fp_input);
+            thread_data[i].input_buffer->size = fread(thread_data[i].input_buffer->data, 1, BUFFER_SIZE, fp_input);
             if (thread_data[i].input_buffer->size == 0)
             {
                 break;
