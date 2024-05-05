@@ -57,7 +57,7 @@ int main()
         scanf("%s", input_file);
         printf("please input output file path\n");
         char output_file[100];
-        user_key = get_aes_key(username);
+        get_aes_key(username, user_key);
         encrypt_file(user_key, input_file, output_file);
     }
     else if (choice == 2)
@@ -67,7 +67,7 @@ int main()
         scanf("%s", input_file);
         printf("please input output file path\n");
         char output_file[100];
-        user_key = get_aes_key(username);
+        get_aes_key(username, user_key);
         decrypt_file(user_key, input_file, output_file);
     }
     else if (choice == 3)
