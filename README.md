@@ -43,3 +43,13 @@ clang function.c -o function -lmthread -lcrypto -L/usr/lib
 ./function -d ttt.txt.cry dfsf.txt abcdefghijklmnop
 
 ```
+
+新版本
+
+```shell
+cd /home/project/minixCryptoFile
+clang main.c aes.c user.c -o main -lmthread -lcrypto -L/usr/lib
+./main
+```
+
+先注册再登录 再加密解密文件
