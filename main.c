@@ -52,21 +52,25 @@ int main()
     scanf("%d", &choice);
     if (choice == 1)
     {
+        printf("username: %s\n", username);
         printf("please input input file path\n");
         char input_file[100];
         scanf("%s", input_file);
         printf("please input output file path\n");
         char output_file[100];
+        scanf("%s", output_file);
         get_aes_key(username, user_key);
         encrypt_file(user_key, input_file, output_file);
     }
     else if (choice == 2)
     {
+        printf("username: %s\n", username);
         printf("please input input file path\n");
         char input_file[100];
         scanf("%s", input_file);
         printf("please input output file path\n");
         char output_file[100];
+        scanf("%s", output_file);
         get_aes_key(username, user_key);
         decrypt_file(user_key, input_file, output_file);
     }
