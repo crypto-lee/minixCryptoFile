@@ -71,7 +71,7 @@ bool register_user()
     fprintf(fp, "%s:", username);
     get_hash_value(password, hashed_password_hex);
     fprintf(fp, "%s", hashed_password_hex);
-    // fprintf(fp, ":");
+    fprintf(fp, ":");
     // for (int i = 0; i < AES_KEY_LEN; i++)
     // {
     //     fprintf(fp, "%02x", aes_key[i]);
