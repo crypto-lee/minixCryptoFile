@@ -10,10 +10,12 @@
 #define AES_KEY_LEN 16
 #define MAX_HASH_LEN 500
 
-void change_password();
+// void change_password();
 bool register_user();
-bool login();
+bool login(char *name, char *passwd);
 bool user_exists(const char *username);
 bool authenticate_user(const char *username, const char *password);
 void get_hash_value(const char *password, char *hashed_password_hex);
+// void get_aes_key(const char *username, unsigned char *aes_key);
 void get_aes_key(const char *username, unsigned char *aes_key);
+void generate_aes_key(const char *username, const char *password, unsigned char *aes_key);

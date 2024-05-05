@@ -37,3 +37,5 @@ void encrypt_decrypt_string(const unsigned char *key);
 void encrypt_file(const unsigned char *key, const char *input_file, const char *output_file);
 
 void decrypt_file(const unsigned char *key, const char *input_file, const char *output_file);
+
+void generate_aes_key(const char *username, const char *password, unsigned char *aes_key);

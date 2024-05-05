@@ -5,6 +5,7 @@ int main()
 {
     int choice;
     char username[MAX_USERNAME_LEN];
+    char password[MAX_PASSWORD_LEN];
     unsigned char user_key[17];
     // detail menu
     while (1)
@@ -27,7 +28,7 @@ int main()
         }
         else if (choice == 2)
         {
-            if (login(username))
+            if (login(username, password))
             {
                 printf("login success\n");
                 break;
@@ -59,7 +60,7 @@ int main()
         printf("please input output file path\n");
         char output_file[100];
         scanf("%s", output_file);
-        get_aes_key(username, user_key);
+        generate_aes_key(username, password, user_key);
         encrypt_file(user_key, input_file, output_file);
     }
     else if (choice == 2)
@@ -71,7 +72,7 @@ int main()
         printf("please input output file path\n");
         char output_file[100];
         scanf("%s", output_file);
-        get_aes_key(username, user_key);
+        generate_aes_key(username, password, user_key);
         decrypt_file(user_key, input_file, output_file);
     }
     else if (choice == 3)
