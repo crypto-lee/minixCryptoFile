@@ -148,18 +148,15 @@ void login()
     }
 }
 
-// 修改密码
 void change_password()
 {
-    // 与注册用户类似，但需要先检查用户是否存在
-
     char username[MAX_USERNAME_LEN];
     char password[MAX_PASSWORD_LEN];
     char new_password[MAX_PASSWORD_LEN];
     char hashed_password_hex[MAX_HASH_LEN];
     unsigned char aes_key[AES_KEY_LEN];
-    char *token;
     FILE *fp;
+    FILE *temp_fp;
     char line[256];
 
     // 获取用户名和密码
@@ -187,41 +184,47 @@ void change_password()
     // 计算新密码的哈希值
     get_hash_value(new_password, hashed_password_hex);
 
-    // 打开文件进行修改
-    fp = fopen("/etc/aeskey", "r+");
-    if (fp == NULL)
+    // 打开原文件和临时文件
+    fp = fopen("/etc/aeskey", "a");
+    temp_fp = fopen("/etc/temp_file", "a");
+    if (fp == NULL || temp_fp == NULL)
     {
         printf("无法打开文件\n");
         exit(1);
     }
-
-    RAND_bytes(aes_key, AES_KEY_LEN);
-    // 逐行读取文件
+    rewind(fp);
+    // rewind(temp_fp);
+    // 逐行读取原文件，并将修改后的用户信息写入临时文件
     while (fgets(line, sizeof(line), fp))
     {
-        // 分割行为用户名、密码哈希和AES密钥
-        token = strtok(line, ":");
+        printf("进入循环\n");
+
+        char *token = strtok(line, ":");
         if (strcmp(token, username) == 0)
         {
-            // 用户名匹配，修改密码哈希
-            fseek(fp, -strlen(line), SEEK_CUR); // 将文件指针移回当前行开头
-            fprintf(fp, "%s:", username);       // 重新写入用户名
-            fprintf(fp, "%s", hashed_password_hex);
-            fprintf(fp, ":"); // 写入分隔符
-            // 将文件指针移到AES密钥位置
+            // 找到需要修改的行，写入新的用户信息到临时文件
+            fprintf(temp_fp, "%s:%s:", username, hashed_password_hex);
+            RAND_bytes(aes_key, AES_KEY_LEN);
             for (int i = 0; i < AES_KEY_LEN; i++)
             {
-                fprintf(fp, "%02x", aes_key[i]);
+                fprintf(temp_fp, "%02x", aes_key[i]);
             }
+            fprintf(temp_fp, "\n");
             printf("密码已修改\n");
-            fclose(fp);
-            return;
+        }
+        else
+        {
+            // 将其他行原样写入临时文件
+            fputs(line, temp_fp);
         }
     }
-
-    // 用户名不存在（理论上不应该到达这里）
-    printf("用户不存在\n");
+    // 关闭原文件和临时文件
     fclose(fp);
+    fclose(temp_fp);
+
+    // 删除原文件，并将临时文件重命名为原文件
+    // remove("/etc/aeskey");
+    // rename("/etc/temp_file", "/etc/aeskey");
 }
 
 bool authenticate_user(const char *username, const char *password)
