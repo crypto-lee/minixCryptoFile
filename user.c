@@ -84,7 +84,7 @@ bool login(char *name)
 
     if (authenticate_user(username, password))
     {
-        name = username;
+        strcpy(name, username);
         return true;
         printf("login success!\n");
     }
@@ -247,7 +247,8 @@ void get_aes_key(const char *username, unsigned char *aes_key)
 
             token = strtok(NULL, ":");
             token = strtok(NULL, ":");
-            aes_key = token;
+            // aes_key = token;
+            strcpy(aes_key, token);
             fclose(fp);
             return;
         }
