@@ -1,53 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h> // 添加头文件以使用布尔类型
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-
-#define MAX_USERNAME_LEN 50
-#define MAX_PASSWORD_LEN 50
-#define AES_KEY_LEN 16 // AES-256密钥长度为32字节
-#define MAX_HASH_LEN 500
-
-// 函数声明
-void change_password(); // 修改密码
-void register_user();
-void login();
-bool user_exists(const char *username);                               // 检查用户是否存在
-bool authenticate_user(const char *username, const char *password);   // 验证用户
-void get_hash_value(const char *password, char *hashed_password_hex); // 获取密码的哈希值
-void get_aes_key(const char *username, unsigned char *aes_key);       // 获取AES密钥
-
-int main()
-{
-    int choice;
-
-    // 显示菜单
-    printf("1. 注册新用户\n");
-    printf("2. 登录\n");
-    printf("3. 修改密码\n"); // 添加修改密码选项
-    printf("请选择: ");
-    scanf("%d", &choice);
-
-    // 根据用户选择执行相应操作
-    switch (choice)
-    {
-    case 1:
-        register_user();
-        break;
-    case 2:
-        login();
-        break;
-    case 3:
-        change_password();
-        break;
-    default:
-        printf("无效的选择\n");
-    }
-
-    return 0;
-}
+#include "user.h"
 
 // 检查用户是否存在
 bool user_exists(const char *username)
@@ -80,7 +31,7 @@ bool user_exists(const char *username)
 }
 
 // 注册新用户
-void register_user()
+bool register_user()
 {
     char username[MAX_USERNAME_LEN];
     char password[MAX_PASSWORD_LEN];
@@ -124,10 +75,11 @@ void register_user()
     // 关闭文件
     fclose(fp);
     printf("注册成功\n");
+    return true;
 }
 
 // 用户登录
-void login()
+bool login(char *name)
 {
     char username[MAX_USERNAME_LEN];
     char password[MAX_PASSWORD_LEN];
@@ -140,12 +92,16 @@ void login()
     // 验证用户
     if (authenticate_user(username, password))
     {
+        name = username;
+        return true;
         printf("登录成功\n");
     }
     else
     {
+        return false;
         printf("用户名或密码错误\n");
     }
+    return true;
 }
 
 void change_password()
