@@ -1,36 +1,34 @@
 #include "user.h"
 
-// 检查用户是否存在
 bool user_exists(const char *username)
 {
     FILE *fp;
     char line[256];
     char *token;
-    // 打开文件
+
     fp = fopen("/etc/aeskey", "r");
     if (fp == NULL)
     {
-        printf("无法打开文件\n");
+        printf("can not open file\n");
         exit(1);
     }
-    // 逐行读取文件
+
     while (fgets(line, sizeof(line), fp))
     {
-        // 分割行为用户名、密码哈希和AES密钥
+
         token = strtok(line, ":");
         if (strcmp(token, username) == 0)
         {
-            // 用户名存在
+
             fclose(fp);
             return true;
         }
     }
-    // 用户名不存在
+
     fclose(fp);
     return false;
 }
 
-// 注册新用户
 bool register_user()
 {
     char username[MAX_USERNAME_LEN];
@@ -39,30 +37,26 @@ bool register_user()
     unsigned char aes_key[AES_KEY_LEN];
     FILE *fp;
 
-    // 获取用户名和密码
-    printf("请输入用户名: ");
+    printf("please input username: ");
     scanf("%s", username);
-    printf("请输入密码: ");
+    printf("please input passwd: ");
     scanf("%s", password);
 
-    // 检查用户是否已存在
     if (user_exists(username))
     {
-        printf("用户已存在\n");
+        printf("user is exist!\n");
         exit(1);
     }
-    // 生成AES密钥
+
     RAND_bytes(aes_key, AES_KEY_LEN);
 
-    // 打开文件
     fp = fopen("/etc/aeskey", "a");
     if (fp == NULL)
     {
-        printf("无法打开文件\n");
+        printf("can not open file\n");
         exit(1);
     }
 
-    // 写入用户名、密码哈希和AES密钥到文件
     fprintf(fp, "%s:", username);
     get_hash_value(password, hashed_password_hex);
     fprintf(fp, "%s", hashed_password_hex);
@@ -72,34 +66,32 @@ bool register_user()
         fprintf(fp, "%02x", aes_key[i]);
     }
     fprintf(fp, "\n");
-    // 关闭文件
+
     fclose(fp);
-    printf("注册成功\n");
+    printf("regeist success!\n");
     return true;
 }
 
-// 用户登录
 bool login(char *name)
 {
     char username[MAX_USERNAME_LEN];
     char password[MAX_PASSWORD_LEN];
-    // 获取用户名和密码
-    printf("请输入用户名: ");
+
+    printf("please input username: ");
     scanf("%s", username);
-    printf("请输入密码: ");
+    printf("please input passwd: ");
     scanf("%s", password);
 
-    // 验证用户
     if (authenticate_user(username, password))
     {
         name = username;
         return true;
-        printf("登录成功\n");
+        printf("login success!\n");
     }
     else
     {
         return false;
-        printf("用户名或密码错误\n");
+        printf("passwd incorrect!\n");
     }
     return true;
 }
@@ -115,50 +107,44 @@ void change_password()
     FILE *temp_fp;
     char line[256];
 
-    // 获取用户名和密码
-    printf("请输入用户名: ");
+    printf("please input username: ");
     scanf("%s", username);
-    printf("请输入密码: ");
+    printf("please input passwd: ");
     scanf("%s", password);
 
-    // 检查用户是否存在
     if (!user_exists(username))
     {
-        printf("用户不存在\n");
+        printf("user not exist\n");
         exit(1);
     }
-    // 检查密码是否正确
+
     if (!authenticate_user(username, password))
     {
-        printf("密码错误\n");
+        printf("passwd not correct\n");
         exit(1);
     }
-    // 输入新密码
-    printf("请输入新密码: ");
+
+    printf("please input passwd: ");
     scanf("%s", new_password);
 
-    // 计算新密码的哈希值
     get_hash_value(new_password, hashed_password_hex);
 
-    // 打开原文件和临时文件
     fp = fopen("/etc/aeskey", "a");
     temp_fp = fopen("/etc/temp_file", "a");
     if (fp == NULL || temp_fp == NULL)
     {
-        printf("无法打开文件\n");
+        printf("can not open file\n");
         exit(1);
     }
     rewind(fp);
-    // rewind(temp_fp);
-    // 逐行读取原文件，并将修改后的用户信息写入临时文件
+
     while (fgets(line, sizeof(line), fp))
     {
-        printf("进入循环\n");
 
         char *token = strtok(line, ":");
         if (strcmp(token, username) == 0)
         {
-            // 找到需要修改的行，写入新的用户信息到临时文件
+
             fprintf(temp_fp, "%s:%s:", username, hashed_password_hex);
             RAND_bytes(aes_key, AES_KEY_LEN);
             for (int i = 0; i < AES_KEY_LEN; i++)
@@ -166,19 +152,18 @@ void change_password()
                 fprintf(temp_fp, "%02x", aes_key[i]);
             }
             fprintf(temp_fp, "\n");
-            printf("密码已修改\n");
+            printf("passwd change success!\n");
         }
         else
         {
-            // 将其他行原样写入临时文件
+
             fputs(line, temp_fp);
         }
     }
-    // 关闭原文件和临时文件
+
     fclose(fp);
     fclose(temp_fp);
 
-    // 删除原文件，并将临时文件重命名为原文件
     // remove("/etc/aeskey");
     // rename("/etc/temp_file", "/etc/aeskey");
 }
@@ -190,25 +175,25 @@ bool authenticate_user(const char *username, const char *password)
     char *token;
     FILE *fp;
     char line[256];
-    // 计算密码的哈希值
+
     get_hash_value(password, hashed_password_hex);
-    // 打开文件
+
     fp = fopen("/etc/aeskey", "r");
     if (fp == NULL)
     {
-        printf("无法打开文件\n");
+        printf("can not open file\n");
         exit(1);
     }
-    // 逐行读取文件
+
     while (fgets(line, sizeof(line), fp))
     {
-        // 分割行为用户名、密码哈希和AES密钥
+
         token = strtok(line, ":");
         if (strcmp(token, username) == 0)
         {
-            // 用户名匹配，验证密码
+
             token = strtok(NULL, ":");
-            if (strcmp(token, hashed_password_hex) == 0) // 使用十六进制字符串进行比较
+            if (strcmp(token, hashed_password_hex) == 0)
             {
 
                 fclose(fp);
@@ -216,7 +201,7 @@ bool authenticate_user(const char *username, const char *password)
             }
         }
     }
-    // 用户名或密码错误
+
     fclose(fp);
     return false;
 }
@@ -226,7 +211,6 @@ void get_hash_value(const char *password, char *hashed_password_hex)
     char hashed_password[EVP_MAX_MD_SIZE];
     unsigned int hashed_password_len;
 
-    // 计算密码的哈希值
     EVP_MD_CTX mdctx;
     EVP_MD_CTX_init(&mdctx);
     EVP_DigestInit_ex(&mdctx, EVP_sha256(), NULL);
@@ -234,7 +218,6 @@ void get_hash_value(const char *password, char *hashed_password_hex)
     EVP_DigestFinal(&mdctx, hashed_password, &hashed_password_len);
     EVP_MD_CTX_cleanup(&mdctx);
 
-    // 将哈希值转换为十六进制字符串
     for (int i = 0; i < hashed_password_len; ++i)
     {
         sprintf(&hashed_password_hex[2 * i], "%02x", hashed_password[i]);
@@ -248,22 +231,20 @@ void get_aes_key(const char *username, unsigned char *aes_key)
     char line[256];
     char *token;
 
-    // 打开文件
     fp = fopen("/etc/aeskey", "r");
     if (fp == NULL)
     {
-        printf("无法打开文件\n");
+        printf("can not open file\n");
         exit(1);
     }
 
-    // 逐行读取文件
     while (fgets(line, sizeof(line), fp))
     {
-        // 分割行为用户名、密码哈希和AES密钥
+
         token = strtok(line, ":");
         if (strcmp(token, username) == 0)
         {
-            // 用户名匹配，提取AES密钥
+
             token = strtok(NULL, ":");
             token = strtok(NULL, ":");
             aes_key = token;
@@ -272,8 +253,7 @@ void get_aes_key(const char *username, unsigned char *aes_key)
         }
     }
 
-    // 用户名不存在
-    printf("用户不存在\n");
+    printf("user not exist\n");
     fclose(fp);
     exit(1);
 }
